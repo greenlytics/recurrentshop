@@ -663,13 +663,13 @@ class RecurrentModel(Recurrent):
             if K.backend() == 'tensorflow':
                 with tf.control_dependencies(None):
                     zero = K.cast(K.zeros((1,))[0], 'int32')
-                    one = K.cast(K.zeros((1,))[0], 'int32')
+                    one = K.cast(K.ones((1,))[0], 'int32')
             else:
                 zero = K.cast(K.zeros((1,))[0], 'int32')
-                one = K.cast(K.zeros((1,))[0], 'int32')
+                one = K.cast(K.ones((1,))[0], 'int32')
             slices = [slice(None), counter[0] - K.switch(counter[0], one, zero)] + [slice(None)] * (K.ndim(ground_truth) - 2)
             ground_truth_slice = ground_truth[slices]
-            readout = K.in_train_phase(K.switch(counter[0], ground_truth_slice, readout), readout)
+            readout = K.in_train_phase(ground_truth_slice, readout)
             states.append(readout)
         if self.decode:
             model_input = states
@@ -1051,6 +1051,8 @@ class RecurrentSequential(RecurrentModel):
                 input_readout_merged = maximum([input, readout])
             elif self.readout == 'readout_only':
                 input_readout_merged = readout
+            elif callable(self.readout):
+                input_readout_merged = self.readout(input, readout)
             initial_states = [Input(batch_shape=K.int_shape(s)) for s in initial_states]
             output = _to_list(self.model([input_readout_merged] + initial_states))
             final_states = output[1:]
