@@ -275,7 +275,7 @@ class RecurrentModel(Recurrent):
 
     # INITIALIZATION
 
-    def __init__(self, input, output, initial_states=None, final_states=None, readout_input=None, teacher_force=False, decode=False, output_length=None, return_states=False, state_initializer=None, **kwargs):
+    def __init__(self, input, output, initial_states=None, final_states=None, readout_input=None, teacher_force=False, teacher_force_rate=1.0, decode=False, output_length=None, return_states=False, state_initializer=None, **kwargs):
         inputs = [input]
         outputs = [output]
         state_spec = None
@@ -316,6 +316,7 @@ class RecurrentModel(Recurrent):
         if teacher_force and not self.readout:
             raise Exception('Readout should be enabled for teacher forcing.')
         self.teacher_force = teacher_force
+        self.teacher_force_rate = teacher_force_rate
         self.model = Model(inputs, outputs)
         super(RecurrentModel, self).__init__(**kwargs)
         input_shape = list(K.int_shape(input))
@@ -669,7 +670,11 @@ class RecurrentModel(Recurrent):
                 one = K.cast(K.ones((1,))[0], 'int32')
             slices = [slice(None), counter[0] - K.switch(counter[0], one, zero)] + [slice(None)] * (K.ndim(ground_truth) - 2)
             ground_truth_slice = ground_truth[slices]
-            readout = K.in_train_phase(ground_truth_slice, readout)
+            if self.teacher_force_rate < 1.0:
+                choice = K.random_binomial((1,), p=self.teacher_force_rate, dtype='float')[0]
+            else:
+                choice = K.constant(1.0)
+            readout = K.in_train_phase(K.switch(K.equal(choice, 1.0), ground_truth_slice, readout), readout)
             states.append(readout)
         if self.decode:
             model_input = states
